@@ -119,13 +119,17 @@ The image_prompt MUST instruct the model to:
   • ensure the visual would clearly make sense ONLY for this business
   • avoid generic visuals that could fit any brand
 - Use {{BUSINESS_AESTHETIC}} to guide colors, mood, and visual language
+- EXPLICITLY incorporate the Primary Color and Secondary Color from {{BUSINESS_CONTEXT}} in the visual design:
+  • Use Primary Color as the dominant color in key visual elements
+  • Use Secondary Color as accent/complementary color
+  • Ensure color scheme aligns with brand identity
 - Translate the intent, emotion, and message of {{CAPTION}} into a visual concept
 - Respect {{TEXT_IN_IMAGE}} rules strictly
 - Align with {{VISUAL_STYLE}}
 - NOT repeat the full caption verbatim inside the image
 - NOT introduce concepts, symbols, or claims that are not supported by {{CAPTION}} or {{BUSINESS_CONTEXT}}
 - NOT visually depict business details unless clearly implied by {{CAPTION}}
-- Do NOT output instructions like “without text” unless {{TEXT_IN_IMAGE}} explicitly requires it
+- Do NOT output instructions like "without text" unless {{TEXT_IN_IMAGE}} explicitly requires it
 - If the image could apply to a generic business, it is INVALID
 
 ────────────────────────────────
@@ -267,10 +271,14 @@ The image_prompt MUST instruct the model to:
 
 - Use {{CAPTION}} as the PRIMARY and HARDCODED semantic reference for the visual
 - Use {{BUSINESS_CONTEXT}} as a SECONDARY reference to ensure:
-  • industry relevance  
-  • brand appropriateness  
+  • industry relevance
+  • brand appropriateness
   • compliance with the business domain
 - Use {{BUSINESS_AESTHETIC}} to guide colors, mood, and visual language
+- EXPLICITLY incorporate the Primary Color and Secondary Color from {{BUSINESS_CONTEXT}} in the visual design:
+  • Use Primary Color as the dominant color in key visual elements
+  • Use Secondary Color as accent/complementary color
+  • Ensure color scheme aligns with brand identity
 - Translate the intent, emotion, and message of {{CAPTION}} into a visual concept
 - Respect {{TEXT_IN_IMAGE}} rules strictly
 - Align with {{VISUAL_STYLE}} and {selected_style}

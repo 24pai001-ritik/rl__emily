@@ -113,6 +113,10 @@ class ContentGenerator:
         if not self.gemini_client:
             raise ValueError("Gemini API key not configured")
 
+        # Warn if {{CAPTION}} placeholder is found (should be replaced before calling this)
+        if "{{CAPTION}}" in image_prompt:
+            print("⚠️  WARNING: {{CAPTION}} placeholder found in image prompt. Use generate_content() instead of generate_image() directly.")
+
         try:
             if USE_NEW_PACKAGE:
                 # New google.genai package API
@@ -195,19 +199,32 @@ class ContentGenerator:
             print(f"Warning: Image generation failed ({e}), using placeholder")
             return f"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
 
-    def generate_content(self, caption_prompt: str, image_prompt: str) -> Dict[str, Any]:
+    def generate_content(self, caption_prompt: str, image_prompt: str, business_context: dict = None) -> Dict[str, Any]:
         """
         Generate both caption and image from their respective prompts.
 
         Args:
             caption_prompt: Prompt for caption generation
             image_prompt: Prompt for image generation
+            business_context: Business profile data dictionary for structured context formatting
 
         Returns:
             Dict with 'caption' and 'image_url' keys
         """
         try:
             caption = self.generate_caption(caption_prompt)
+
+            # Replace {{CAPTION}} placeholder in image_prompt with actual generated caption
+            if caption and "{{CAPTION}}" in image_prompt:
+                image_prompt = image_prompt.replace("{{CAPTION}}", caption)
+                print(f"🔄 Replaced {{CAPTION}} placeholder in image prompt")
+
+            # Format and append structured business context to image prompt if provided
+            if business_context:
+                formatted_context = format_business_context(business_context)
+                image_prompt += f"\n\nBusiness Context: \n\n{formatted_context}"
+                print(f"📋 Appended structured business context to image prompt")
+
             image_url = self.generate_image(image_prompt)
 
             return {
@@ -223,6 +240,55 @@ class ContentGenerator:
             }
 
 
+def format_business_context(profile_data: dict) -> str:
+    """
+    Format business profile data into structured context for image generation LLMs.
+
+    Args:
+        profile_data: Business profile dictionary from database
+
+    Returns:
+        Formatted business context string
+    """
+    context_parts = []
+
+    # Core business information
+    if profile_data.get("business_name"):
+        context_parts.append(f"Business Name: {profile_data['business_name']}")
+
+    if profile_data.get("industries"):
+        industries = ", ".join(profile_data["industries"]) if isinstance(profile_data["industries"], list) else profile_data["industries"]
+        context_parts.append(f"Industry: {industries}")
+
+    if profile_data.get("business_types"):
+        business_types = ", ".join(profile_data["business_types"]) if isinstance(profile_data["business_types"], list) else profile_data["business_types"]
+        context_parts.append(f"Business Type: {business_types}")
+
+    # Description and value proposition
+    if profile_data.get("business_description"):
+        context_parts.append(f"Description: {profile_data['business_description']}")
+
+    if profile_data.get("unique_value_proposition"):
+        context_parts.append(f"Unique Value Proposition: {profile_data['unique_value_proposition']}")
+
+    # Brand and audience information
+    if profile_data.get("brand_voice"):
+        context_parts.append(f"Brand Voice: {profile_data['brand_voice']}")
+
+    if profile_data.get("target_audience"):
+        context_parts.append(f"Target Audience: {profile_data['target_audience']}")
+
+    # Visual preferences - Always include color information
+    primary_color = profile_data.get("primary_color", "Not specified")
+    context_parts.append(f"Primary Color: {primary_color}")
+
+    secondary_color = profile_data.get("secondary_color", "Not specified")
+    context_parts.append(f"Secondary Color: {secondary_color}")
+
+    # Join all parts with proper formatting
+    return "\n\n".join(context_parts)
+
+
 # Convenience functions for direct use
 def generate_caption(caption_prompt: str) -> str:
     """Generate a caption from a prompt."""
@@ -236,10 +302,10 @@ def generate_image(image_prompt: str) -> str:
     return generator.generate_image(image_prompt)
 
 
-def generate_content(caption_prompt: str, image_prompt: str) -> Dict[str, Any]:
+def generate_content(caption_prompt: str, image_prompt: str, business_context: dict = None) -> Dict[str, Any]:
     """Generate both caption and image from their prompts."""
     generator = ContentGenerator()
-    return generator.generate_content(caption_prompt, image_prompt)
+    return generator.generate_content(caption_prompt, image_prompt, business_context)
 
 
 if __name__ == "__main__":

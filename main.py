@@ -58,6 +58,7 @@ def run_one_post(BUSINESS_ID, platform, time=None, day_of_week=None):
     business_context=str(profile_data),
     platform=platform,
     date=date)
+    
     topic_text = topic_data["topic"]
 
     #create embedding for topic
@@ -113,14 +114,20 @@ def run_one_post(BUSINESS_ID, platform, time=None, day_of_week=None):
         f"Write a {action['TONE']} caption in {action['LENGTH']} length with {action['CREATIVITY']} creativity level. The topic is {topic_text}. Make it suitable for {platform}.")
 
     print("🎨 Generating caption and image content...")
-    content_result = generate_content(caption_prompt, image_prompt)
+    content_result = generate_content(caption_prompt, image_prompt, profile_data)
 
     if content_result["status"] == "success":
         generated_caption = content_result["caption"]
         generated_image_url = content_result["image_url"]
+
+        # Replace {{CAPTION}} placeholder in image_prompt with actual generated caption
+        if generated_caption and "{{CAPTION}}" in image_prompt:
+            image_prompt = image_prompt.replace("{{CAPTION}}", generated_caption)
+            print("🔄 Updated image prompt with generated caption")
+
         print("✅ Content generated successfully and stored")
         print(f"📝 Caption: {generated_caption[:100]}...")
-        
+
     else:
         print(f"❌ Content generation failed: {content_result['error']}")
         generated_caption = None
@@ -176,7 +183,7 @@ if __name__ == "__main__":
             continue
 
         # Get connected platforms for this business
-        user_connected_platforms = (db.get_connected_platforms(business_id)).unique()
+        user_connected_platforms = list(set(db.get_connected_platforms(business_id)))
         print(f"📱 Business {business_id} has {len(user_connected_platforms)} connected platforms: {user_connected_platforms}")
 
         # Create posts for each platform
