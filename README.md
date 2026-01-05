@@ -8,6 +8,7 @@ An AI-powered social media content generation system that uses reinforcement lea
 - **Multi-Platform Support**: Instagram, Twitter/X, LinkedIn, Facebook
 - **Trend-Aware Generation**: Creates trendy content based on current social media trends
 - **Business Profile Adaptation**: Tailors content to specific business types and industries
+- **Automated Scheduling & Publishing**: Cron-based system for scheduling and publishing posts
 - **Real-time Optimization**: Continuously improves content performance
 
 ## Architecture
@@ -19,12 +20,22 @@ An AI-powered social media content generation system that uses reinforcement lea
 - `generate.py`: Prompt generation with trendy/standard modes
 - `db.py`: Supabase database operations
 
-### Learning Cycle
+### Post Lifecycle
 
-1. **Generate Content**: RL agent selects creative parameters
-2. **Publish & Collect Metrics**: Post content and gather engagement data
-3. **Calculate Reward**: Evaluate performance based on platform-specific metrics
-4. **Update Agent**: RL agent learns from feedback to improve future content
+1. **Generate Content**: RL agent selects creative parameters and generates content
+2. **Schedule Posts**: Cron job runs at 5 AM IST, changes status from 'generated' to 'scheduled'
+3. **Publish Content**: Posts are published at their scheduled time, status changes to 'posted'
+4. **Collect Metrics**: Gather engagement data from social media platforms
+5. **Calculate Reward**: Evaluate performance based on platform-specific metrics
+6. **Update Agent**: RL agent learns from feedback to improve future content
+
+### Automated Scheduling System
+
+The system includes automated cron jobs for content scheduling and publishing:
+
+- **Scheduling Job**: Runs at 5 AM IST daily, finds posts with status 'generated' and schedules them
+- **Publishing Job**: Runs every 15 minutes, publishes scheduled posts at their designated time
+- **Status Tracking**: Posts progress through states: `generated` → `scheduled` → `posted` → reward calculation
 
 ## Setup
 
@@ -55,6 +66,19 @@ cp env.example .env
 
 4. Configure your Supabase database with the required tables (see Database Schema section below).
 
+5. Set up automated scheduling (optional but recommended):
+```bash
+# Linux/macOS
+./setup_cron.sh
+
+# Windows
+setup_cron.bat
+```
+
+This will set up:
+- **Scheduling job**: Runs at 5 AM IST daily to schedule generated posts
+- **Publishing job**: Runs every 15 minutes to publish scheduled content
+
 ## Database Schema
 
 Create these tables in your Supabase database:
@@ -81,11 +105,11 @@ CREATE TABLE rl_preferences (
 #### `post_contents`
 ```sql
 CREATE TABLE post_contents (
-  id SERIAL PRIMARY KEY,
-  post_id TEXT NOT NULL UNIQUE,
-  action_id INTEGER,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id TEXT NOT NULL,
+  action_id UUID REFERENCES rl_actions(id) ON DELETE CASCADE,
   platform TEXT NOT NULL,
-  business_id TEXT NOT NULL,
+  business_id UUID,
   topic TEXT,
   post_type TEXT,
   business_context TEXT,
@@ -94,10 +118,12 @@ CREATE TABLE post_contents (
   caption_prompt TEXT,
   generated_caption TEXT,
   generated_image_url TEXT,
-  status TEXT DEFAULT 'generated',
-  created_at TIMESTAMP DEFAULT NOW(),
-  posted_at TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT NOW()
+  status TEXT DEFAULT 'generated', -- generated | scheduled | posted | failed | deleted
+  media_id TEXT, -- Social media platform's post/media ID when published
+  post_date DATE, -- Scheduled date for posting
+  post_time TIME, -- Scheduled time for posting
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ```
 
@@ -167,11 +193,36 @@ CREATE TABLE profiles (
 
 ## Usage
 
+### Content Generation
+
 Run a single content generation cycle:
 
 ```bash
 python main.py
 ```
+
+### Manual Scheduling & Publishing
+
+You can also run the scheduling and publishing jobs manually:
+
+```bash
+# Schedule generated posts (changes status from 'generated' to 'scheduled')
+python post_scheduler.py schedule
+
+# Publish scheduled posts (changes status from 'scheduled' to 'posted')
+python post_scheduler.py post
+```
+
+### Automated Scheduling
+
+The system includes automated cron jobs that run:
+
+- **Scheduling job**: At 5 AM IST daily
+- **Publishing job**: Every 15 minutes
+
+Set up automated scheduling using the setup scripts:
+- Linux/macOS: `./setup_cron.sh`
+- Windows: `setup_cron.bat`
 
 ## Database Schema
 

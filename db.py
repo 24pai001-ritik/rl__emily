@@ -211,14 +211,85 @@ def insert_post_content(
         print(f"Error inserting post content for post_id {post_id}: {e}")
         raise
         
-def mark_post_as_posted(post_id):
+def mark_post_as_posted(post_id, media_id=None):
+    """
+    Mark a post as posted with optional media_id
+    """
+    try:
+        update_data = {
+            "status": "posted",
+            "updated_at": datetime.now(IST).isoformat()
+        }
+
+        if media_id:
+            update_data["media_id"] = media_id
+
+        supabase.table("post_contents").update(update_data).eq("post_id", post_id).execute()
+        print(f"✅ Marked post {post_id} as posted")
+    except Exception as e:
+        print(f"❌ Error marking post {post_id} as posted: {e}")
+        raise
+
+def schedule_post(post_id):
+    """
+    Mark a post as scheduled
+    """
     try:
         supabase.table("post_contents").update({
-            "status": "generated"
+            "status": "scheduled",
+            "updated_at": datetime.now(IST).isoformat()
         }).eq("post_id", post_id).execute()
+        print(f"📅 Marked post {post_id} as scheduled")
     except Exception as e:
-        print(f"Error marking post {post_id} as generated: {e}")
+        print(f"❌ Error marking post {post_id} as scheduled: {e}")
         raise
+
+def fail_post(post_id):
+    """
+    Mark a post as failed
+    """
+    try:
+        supabase.table("post_contents").update({
+            "status": "failed",
+            "updated_at": datetime.now(IST).isoformat()
+        }).eq("post_id", post_id).execute()
+        print(f"❌ Marked post {post_id} as failed")
+    except Exception as e:
+        print(f"❌ Error marking post {post_id} as failed: {e}")
+        raise
+
+def get_posts_by_status(status):
+    """
+    Get all posts with a specific status
+    """
+    try:
+        res = supabase.table("post_contents").select("*").eq("status", status).execute()
+        return res.data or []
+    except Exception as e:
+        print(f"❌ Error fetching posts with status '{status}': {e}")
+        return []
+
+def get_scheduled_posts_ready_to_post():
+    """
+    Get scheduled posts that are ready to be posted (current time >= scheduled time)
+    """
+    try:
+        current_time = datetime.now(IST)
+        current_date = current_time.date()
+        current_time_str = current_time.strftime("%H:%M:%S")
+
+        # Query for posts scheduled for today at or before current time
+        res = supabase.table("post_contents") \
+            .select("*") \
+            .eq("status", "scheduled") \
+            .eq("post_date", current_date.isoformat()) \
+            .lte("post_time", current_time_str) \
+            .execute()
+
+        return res.data or []
+    except Exception as e:
+        print(f"❌ Error fetching scheduled posts ready to post: {e}")
+        return []
 
 def create_post_reward_record(profile_id, post_id, platform, action_id=None):
     """Create initial post reward record when post is published"""
