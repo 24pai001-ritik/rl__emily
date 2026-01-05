@@ -5,6 +5,8 @@ import sys
 from datetime import datetime
 import pytz
 from dotenv import load_dotenv
+import time
+from datetime import datetime, timedelta
 
 # Add current directory to path to import local modules
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -15,7 +17,7 @@ load_dotenv()
 # Indian Standard Time (IST) - Asia/Kolkata
 IST = pytz.timezone("Asia/Kolkata")
 
-import db
+
 
 def get_generated_posts():
     """
@@ -64,37 +66,41 @@ def schedule_posts(posts):
 
 def post_to_platform(post):
     """
-    Actually post to the social media platform
-    This is a placeholder - in real implementation, this would use platform APIs
+    Actually post to the social media platform using real APIs
     """
     try:
         platform = post["platform"]
         post_id = post["post_id"]
+        business_id = post["business_id"]
         caption = post.get("generated_caption", "")
         image_url = post.get("generated_image_url")
 
-        # Placeholder for actual posting logic
-        # This would integrate with platform APIs (Instagram Graph API, Facebook API, etc.)
+        print(f"🚀 Posting {post_id} to {platform} for business {business_id}...")
 
-        print(f"🚀 Posting {post_id} to {platform}...")
+        # Use real social media APIs
+        result = poster.post_to_platform(
+            business_id=business_id,
+            platform=platform,
+            post_id=post_id,
+            caption=caption,
+            image_url=image_url
+        )
 
-        # Simulate posting delay
-        import time
-        time.sleep(1)
-
-        # Mock media_id - in real implementation, this would come from the platform API
-        media_id = f"{platform}_{post_id}_{int(datetime.now().timestamp())}"
-
-        print(f"✅ Successfully posted {post_id} to {platform} (media_id: {media_id})")
-
-        return {
-            "success": True,
-            "media_id": media_id,
-            "posted_at": datetime.now(IST).isoformat()
-        }
+        if result["success"]:
+            return {
+                "success": True,
+                "media_id": result["media_id"],
+                "posted_at": datetime.now(IST).isoformat()
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.get("error", "Unknown error")
+            }
 
     except Exception as e:
-        print(f"❌ Error posting {post['post_id']} to {platform}: {e}")
+        error_msg = f"Error posting {post['post_id']} to {platform}: {e}"
+        print(f"❌ {error_msg}")
         return {
             "success": False,
             "error": str(e)

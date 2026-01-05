@@ -195,9 +195,10 @@ class ContentGenerator:
                 raise RuntimeError("No image generated in response")
 
         except Exception as e:
-            # Return a placeholder image URL if generation fails
-            print(f"Warning: Image generation failed ({e}), using placeholder")
-            return f"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+            # Raise clear error instead of returning placeholder
+            error_msg = f"Image generation failed: {str(e)}"
+            print(f"❌ {error_msg}")
+            raise RuntimeError(error_msg)
 
     def generate_content(self, caption_prompt: str, image_prompt: str, business_context: dict = None) -> Dict[str, Any]:
         """

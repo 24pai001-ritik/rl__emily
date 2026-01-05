@@ -76,7 +76,7 @@ async def process_rl_update_job(job: Job) -> Dict[str, Any]:
 
         # Get action and context from database
         # This assumes the action and context are stored during posting
-        action_data = get_action_and_context_from_db(post_id, platform)
+        action_data = get_action_and_context_from_db(post_id, platform, profile_id)
 
         if not action_data:
             print(f"⚠️  No action data found for {post_id}, skipping RL update")
@@ -105,7 +105,7 @@ async def process_rl_update_job(job: Job) -> Dict[str, Any]:
         print(f"❌ Error in RL update job: {e}")
         return {"status": "error", "error": str(e)}
 
-def get_action_and_context_from_db(post_id: str, platform: str) -> Optional[Dict[str, Any]]:
+def get_action_and_context_from_db(post_id: str, platform: str, profile_id: str) -> Optional[Dict[str, Any]]:
     """Get action and context data from database for RL update"""
     try:
         # Get action data from rl_actions table
@@ -126,13 +126,26 @@ def get_action_and_context_from_db(post_id: str, platform: str) -> Optional[Dict
             "VISUAL_STYLE": action_row.get("visual_style")
         }
 
-        # Reconstruct context (this is simplified - in production you'd store the full context)
+        # Get the topic from the post data
+        topic = action_row.get("topic", "")
+        topic_embedding = db.embed_topic(topic) if topic else None
+
+        # Get business embedding
+        business_embedding = db.get_profile_embedding_with_fallback(profile_id)
+        if business_embedding is None:
+            print(f"❌ No business embedding found for {profile_id}, cannot perform RL update")
+            return None
+
+        # Use topic embedding if available, otherwise use business embedding
+        final_topic_embedding = topic_embedding if topic_embedding is not None else business_embedding
+
+        # Reconstruct context with real business data
         context = {
             "platform": platform,
             "time_bucket": action_row.get("time_bucket"),
             "day_of_week": action_row.get("day_of_week"),
-            "business_embedding": db.get_profile_embedding_with_fallback("7648103e-81be-4fd9-b573-8e72e2fcbe5d"),  # Default business ID
-            "topic_embedding": db.get_profile_embedding_with_fallback("7648103e-81be-4fd9-b573-8e72e2fcbe5d")  # Placeholder
+            "business_embedding": business_embedding,
+            "topic_embedding": final_topic_embedding
         }
 
         # Reconstruct context vector
@@ -206,19 +219,17 @@ def queue_reward_calculation_job(profile_id: str, post_id: str, platform: str) -
     print(f"📊 Current queue size: {job_queue.qsize()}")
     return job_id
 
-def start_job_worker():
-    """Start the job worker in a background thread"""
-    def run_worker():
+if __name__ == "__main__":
+    """Run job worker as independent process"""
+    print("🔄 Starting RL Job Worker as independent process...")
+    print("📋 This will run continuously and process queued jobs")
+    print("⚠️  Use Ctrl+C to stop gracefully")
+
+    try:
+        # Run the job worker continuously
         asyncio.run(job_worker())
-
-    worker_thread = threading.Thread(target=run_worker, daemon=True)
-    worker_thread.start()
-    print("RL job worker started in background thread")
-
-def get_job_status(job_id: str) -> Optional[Dict[str, Any]]:
-    """Get status of a job"""
-    return job_results.get(job_id)
-
-
-# Start worker when module is imported
-start_job_worker()
+    except KeyboardInterrupt:
+        print("\n🛑 Job worker stopped by user")
+    except Exception as e:
+        print(f"❌ Job worker error: {e}")
+        raise

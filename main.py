@@ -6,11 +6,17 @@ Flow:
 1. Decide topic + post type
 2. Generate prompts (via generate.py + RL)
 3. Store content (post_contents)
-4. (Simulate) post publishing
-5. Collect metrics (simulated for now)
+4. Queue for scheduled posting
+5. Collect metrics (via cron job)
 6. Compute reward
 7. Update RL
 """
+
+# Load environment variables
+from dotenv import load_dotenv
+import os
+load_dotenv()
+
 # from db import fetch_or_calculate_reward
 
 import uuid
@@ -27,11 +33,41 @@ IST = pytz.timezone("Asia/Kolkata")
 import db
 # from rl_agent import update_rl
 from generate import generate_prompts,embed_topic,generate_topic
-from job_queue import queue_reward_calculation_job, start_job_worker
+from job_queue import queue_reward_calculation_job
 from content_generation import generate_content
 
+# Add imports
+from post_scheduler import run_scheduling_job, run_posting_job
+import time
+from datetime import datetime, timedelta
 
-# -------------------------------------------------
+# Add this function
+def check_and_run_scheduled_jobs():
+    """Check current time and run scheduled jobs if needed"""
+    current_time = datetime.now(IST)
+    current_time_str = current_time.strftime("%H:%M")
+    
+    # Run scheduling job at 8:30 AM IST daily
+    if current_time_str == "07:30":
+        print("🌅 Time is 7:30 AM - Running scheduling job...")
+        try:
+            run_scheduling_job()
+            print("✅ Scheduling job completed")
+        except Exception as e:
+            print(f"❌ Scheduling job failed: {e}")
+    
+    # Run posting jobs at scheduled times
+    posting_times = ["08:30", "13:00", "18:30", "21:30"]  # Morning, Afternoon, Evening, Night
+    
+    if current_time_str in posting_times:
+        print(f"🚀 Time is {current_time_str} - Running posting job...")
+        try:
+            run_posting_job()
+            print("✅ Posting job completed")
+        except Exception as e:
+            print(f"❌ Posting job failed: {e}")
+
+
 # MAIN LOOP
 # -------------------------------------------------
 
@@ -51,6 +87,9 @@ def run_one_post(BUSINESS_ID, platform, time=None, day_of_week=None):
 
     # Get business embedding and profile data from profiles table
     business_embedding = db.get_profile_embedding_with_fallback(BUSINESS_ID)
+    if business_embedding is None:
+        raise RuntimeError(f"No business embedding found for business {BUSINESS_ID}. Business profile must be created first.")
+
     profile_data = db.get_profile_business_data(BUSINESS_ID)
 
     #generate topic
@@ -108,7 +147,7 @@ def run_one_post(BUSINESS_ID, platform, time=None, day_of_week=None):
     # ---------- 4️⃣ STORE POST CONTENT ----------
     # Extract prompts based on mode (handle both trendy and standard modes)
     image_prompt = result.get("image_prompt",
-        f"Create an image with {action['VISUAL_STYLE']} style, {action['TONE']} tone, {action['CREATIVITY']} creativity level.The topic is {topic_text}. Make it engaging for {platform}.")
+        f"Create an image with {action['VISUAL_STYLE']} style, {action['TONE']} tone, {action['CREATIVITY']} creativity level.The topic is {topic_text}. Make it engaging for {platform}.Do not include caption in the image  directly.just learn from the caption and generate the image.")
 
     caption_prompt = result.get("caption_prompt",
         f"Write a {action['TONE']} caption in {action['LENGTH']} length with {action['CREATIVITY']} creativity level. The topic is {topic_text}. Make it suitable for {platform}.")
@@ -129,9 +168,9 @@ def run_one_post(BUSINESS_ID, platform, time=None, day_of_week=None):
         print(f"📝 Caption: {generated_caption[:100]}...")
 
     else:
-        print(f"❌ Content generation failed: {content_result['error']}")
-        generated_caption = None
-        generated_image_url = None
+        error_msg = f"Content generation failed: {content_result['error']}"
+        print(f"❌ {error_msg}")
+        raise RuntimeError(error_msg)
 
     db.insert_post_content(
         post_id=post_id,
@@ -147,10 +186,8 @@ def run_one_post(BUSINESS_ID, platform, time=None, day_of_week=None):
         generated_image_url=generated_image_url
     )
 
-    # ---------- 5️⃣ SIMULATE POSTING ----------
-   
+    # ---------- 5️⃣ QUEUE FOR SCHEDULING ----------
 
-    db.mark_post_as_posted(post_id)
 
     # Create initial reward record for future calculation
     db.create_post_reward_record(BUSINESS_ID, post_id, platform, action_id)
@@ -168,37 +205,53 @@ def run_one_post(BUSINESS_ID, platform, time=None, day_of_week=None):
 ALLOWED_PLATFORMS = {"instagram","facebook"}
 
 if __name__ == "__main__":
+    check_and_run_scheduled_jobs()
+    try:
+        # Get all business profiles
+        all_business_ids = db.get_all_profile_ids()
+        print(f"📊 Found {len(all_business_ids)} business profiles to check")
 
-    # Get all business profiles
-    all_business_ids = db.get_all_profile_ids()
-    print(f"📊 Found {len(all_business_ids)} business profiles to check")
+        # Process each business
+        for business_id in all_business_ids:
+            try:
+                print(f"\n🏢 Processing business: {business_id}")
 
-    # Process each business
-    for business_id in all_business_ids:
-        print(f"\n🏢 Processing business: {business_id}")
+                # Check if this business should create posts today
+                if not db.should_create_post_today(business_id):
+                    print(f"⏸️ Skipping business {business_id} — not scheduled for today (IST)")
+                    continue
 
-        # Check if this business should create posts today
-        if not db.should_create_post_today(business_id):
-            print(f"⏸️ Skipping business {business_id} — not scheduled for today (IST)")
-            continue
+                # Get connected platforms for this business
+                user_connected_platforms = list(set(db.get_connected_platforms(business_id)))
+                print(f"📱 Business {business_id} has {len(user_connected_platforms)} connected platforms: {user_connected_platforms}")
 
-        # Get connected platforms for this business
-        user_connected_platforms = list(set(db.get_connected_platforms(business_id)))
-        print(f"📱 Business {business_id} has {len(user_connected_platforms)} connected platforms: {user_connected_platforms}")
+                # Create posts for each platform
+                for platform in user_connected_platforms:
+                    try:
+                        platform = platform.lower().strip()  # normalize
 
-        # Create posts for each platform
-        for platform in user_connected_platforms:
-            platform = platform.lower().strip()  # normalize
+                        if platform not in ALLOWED_PLATFORMS:
+                            print(f"❌ Skipping unsupported platform: {platform} for business {business_id}")
+                            continue  # skip unsupported platforms
 
-            if platform not in ALLOWED_PLATFORMS:
-                print(f"❌ Skipping unsupported platform: {platform} for business {business_id}")
-                continue  # skip unsupported platforms
+                        print(f"🚀 Creating post for business {business_id} on {platform}")
+                        
+                        run_one_post(
+                            BUSINESS_ID=business_id,
+                            platform=platform,
+                        )
+                        print(f"✅ Successfully processed post for {business_id} on {platform}")
 
-            print(f"🚀 Creating post for business {business_id} on {platform}")
-            start_job_worker()
-            run_one_post(
-                BUSINESS_ID=business_id,
-                platform=platform,
-            )
+                    except Exception as e:
+                        print(f"❌ Failed to create post for {business_id} on {platform}: {e}")
+                        continue  # Continue with other platforms
 
-    print("\n✅ Daily post creation process completed for all businesses")
+            except Exception as e:
+                print(f"❌ Failed to process business {business_id}: {e}")
+                continue  # Continue with other businesses
+
+        print("\n✅ Daily post creation process completed for all businesses")
+
+    except Exception as e:
+        print(f"❌ Critical error in main process: {e}")
+        raise

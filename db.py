@@ -217,8 +217,7 @@ def mark_post_as_posted(post_id, media_id=None):
     """
     try:
         update_data = {
-            "status": "posted",
-            "updated_at": datetime.now(IST).isoformat()
+            "status": "posted"
         }
 
         if media_id:
@@ -236,8 +235,7 @@ def schedule_post(post_id):
     """
     try:
         supabase.table("post_contents").update({
-            "status": "scheduled",
-            "updated_at": datetime.now(IST).isoformat()
+            "status": "scheduled"
         }).eq("post_id", post_id).execute()
         print(f"📅 Marked post {post_id} as scheduled")
     except Exception as e:
@@ -250,8 +248,7 @@ def fail_post(post_id):
     """
     try:
         supabase.table("post_contents").update({
-            "status": "failed",
-            "updated_at": datetime.now(IST).isoformat()
+            "status": "failed"
         }).eq("post_id", post_id).execute()
         print(f"❌ Marked post {post_id} as failed")
     except Exception as e:
@@ -456,15 +453,15 @@ def get_profile_embedding(profile_id):
 
 
 def get_profile_embedding_with_fallback(profile_id):
-    """Get profile embedding with fallback to random"""
+    """Get profile embedding, return None if not found (no fake data)"""
     embedding = get_profile_embedding(profile_id)
 
     if embedding is not None:
         return embedding
 
-    # Fallback to random embedding if not found in database
-    print(f"Profile embedding not found for {profile_id}, using random embedding")
-    return np.random.rand(384).astype("float32")
+    # No fallback to fake data - return None to indicate missing data
+    print(f"⚠️ Profile embedding not found for {profile_id} - no embedding available")
+    return None
 
 def get_profile_business_data(profile_id):
     """Fetch business-related data from profiles table"""

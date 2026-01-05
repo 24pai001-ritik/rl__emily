@@ -7,3 +7,4 @@ langchain-openai
 langchain-core
 requests
 pytz
+cryptography>=3.4.0

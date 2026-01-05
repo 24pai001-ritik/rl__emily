@@ -9,6 +9,8 @@ An AI-powered social media content generation system that uses reinforcement lea
 - **Trend-Aware Generation**: Creates trendy content based on current social media trends
 - **Business Profile Adaptation**: Tailors content to specific business types and industries
 - **Automated Scheduling & Publishing**: Cron-based system for scheduling and publishing posts
+- **Live Social Media Integration**: Real API integration with all major platforms
+- **Production-Ready**: Rate limiting, error handling, and retry logic
 - **Real-time Optimization**: Continuously improves content performance
 
 ## Architecture
@@ -66,7 +68,12 @@ cp env.example .env
 
 4. Configure your Supabase database with the required tables (see Database Schema section below).
 
-5. Set up automated scheduling (optional but recommended):
+5. Test the live posting system:
+```bash
+python test_live_posting.py
+```
+
+6. Set up automated scheduling:
 ```bash
 # Linux/macOS
 ./setup_cron.sh
@@ -78,6 +85,43 @@ setup_cron.bat
 This will set up:
 - **Scheduling job**: Runs at 5 AM IST daily to schedule generated posts
 - **Publishing job**: Runs every 15 minutes to publish scheduled content
+
+## 🚀 Going Live - Production Deployment
+
+### Prerequisites
+- ✅ Valid social media API credentials in `.env`
+- ✅ Active platform connections in `platform_connections` table
+- ✅ Generated content in `post_contents` table
+- ✅ Cron jobs configured
+
+### Test Live Posting
+```bash
+# Test credentials
+python test_live_posting.py
+
+# Test scheduling (safe - doesn't post)
+python post_scheduler.py schedule
+
+# Test actual posting (will post live!)
+python post_scheduler.py post
+```
+
+### Production Monitoring
+- **Logs**: Check `logs/scheduler.log` and `logs/publisher.log`
+- **Database**: Monitor `post_contents` table for status changes
+- **Rate Limits**: System includes automatic retry and rate limit handling
+
+### Supported Platforms
+- **Instagram**: Image posts via Graph API
+- **Facebook**: Text and image posts via Graph API
+- **LinkedIn**: Text and image posts via REST API
+- **Twitter/X**: Text posts via API v2
+
+### Security Notes
+- Access tokens are stored encrypted in the database
+- API calls include proper error handling and retry logic
+- Rate limiting is handled automatically
+- Failed posts are marked with `failed` status for manual review
 
 ## Database Schema
 
